@@ -15,7 +15,8 @@ from solarshield_ai.data import (
     load_cdf,
     load_cdf_folder,
     load_csv,
-    numeric_columns,
+    default_feature_columns,
+    ordered_numeric_columns,
     summarize_source,
 )
 from solarshield_ai.modeling import train_forecast_models
@@ -31,7 +32,7 @@ with st.sidebar:
     st.header("Data source")
     data_mode = st.radio("Input mode", ["Local combined folder", "Upload files", "Sample demo data"])
     combined_folder = st.text_input("Combined CDF folder", value="combined", help="Folder containing CDAWeb .cdf files")
-    uploaded_files = st.file_uploader("Upload GOES/Wind CSV or CDF files", type=["csv", "cdf"], accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload CDAWeb CSV or CDF files", type=["csv", "cdf"], accept_multiple_files=True)
     model_name = st.selectbox("Model", ["Gradient Boosting", "Random Forest", "XGBoost"])
     cadence = st.selectbox("Resampling cadence", ["5min", "10min", "15min"], index=0)
 
@@ -64,7 +65,7 @@ def load_dashboard_data() -> tuple[pd.DataFrame, str]:
 
 
 raw_data, source_name = load_dashboard_data()
-available_columns = numeric_columns(raw_data)
+available_columns = ordered_numeric_columns(raw_data)
 if not available_columns:
     st.error("No numeric CDAWeb variables were found in the selected input.")
     st.stop()
@@ -72,11 +73,11 @@ if not available_columns:
 default_target = default_target_column(raw_data)
 with st.sidebar:
     target_column = st.selectbox("Forecast target", available_columns, index=available_columns.index(default_target))
-    default_features = [column for column in available_columns if column != target_column]
+    default_features = default_feature_columns(raw_data, target_column)
     selected_features = st.multiselect(
         "Input fields",
         available_columns,
-        default=default_features[: min(12, len(default_features))],
+        default=default_features,
         help="Select CDAWeb variables/components to use as model inputs.",
     )
 

@@ -8,7 +8,7 @@ SolarShield AI is a hackathon-ready Python and Streamlit application for forecas
 - Reads multiple uploaded CSV/CDF files and merges them into one timestamp-indexed dataset.
 - Flattens CDAWeb vector/tensor variables into model-ready component columns, for example `U_eGSE_0`, `U_eGSE_1`, and `U_eGSE_2`.
 - Supports Wind SWE fields shown by CDAWeb/cdflib, including `N_elec`, `U_eGSE`, `UceGSE`, `P_eGSE`, `T_elec`, `TcElec`, `W_elec`, `WcElec`, `Te_pal`, `Te_per`, `TecPal`, `TecPer`, `Te_ani`, `TecAni`, and `Gyrtrp` when present in the files.
-- Lets the user choose the forecast target and model input fields directly in the dashboard.
+- Lets the user choose the forecast target and model input fields directly in the dashboard, with Wind SWE columns ordered ahead of generic variables.
 - Provides a deterministic built-in sample dataset for demos when mission data is unavailable.
 - Cleans and resamples time-series data to a configurable cadence.
 - Engineers lag, rolling-window, and plasma/vector magnitude features.

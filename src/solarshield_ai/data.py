@@ -15,6 +15,38 @@ SAMPLE_FEATURE_COLUMNS = ["solar_wind_speed", "proton_density", "imf_bz"]
 SAMPLE_REQUIRED_COLUMNS = [DEFAULT_TARGET_COLUMN, *SAMPLE_FEATURE_COLUMNS]
 CDF_TIME_CANDIDATES = ["Epoch", "epoch", "Time", "time", "Timestamp", "timestamp"]
 CDF_FILL_SENTINELS = (-1.0e31, -1.0e30, 1.0e30, 1.0e31)
+WIND_SWE_FIELDS = [
+    "N_elec",
+    "U_eGSE",
+    "U_eGSE_0",
+    "U_eGSE_1",
+    "U_eGSE_2",
+    "UceGSE",
+    "UceGSE_0",
+    "UceGSE_1",
+    "UceGSE_2",
+    "P_eGSE",
+    "P_eGSE_0",
+    "P_eGSE_1",
+    "P_eGSE_2",
+    "T_elec",
+    "TcElec",
+    "W_elec",
+    "W_elec_0",
+    "W_elec_1",
+    "W_elec_2",
+    "WcElec",
+    "WcElec_0",
+    "WcElec_1",
+    "WcElec_2",
+    "Te_pal",
+    "Te_per",
+    "TecPal",
+    "TecPer",
+    "Te_ani",
+    "TecAni",
+    "Gyrtrp",
+]
 
 
 @dataclass(frozen=True)
@@ -128,6 +160,23 @@ def numeric_columns(frame: pd.DataFrame) -> list[str]:
     """Return dataframe columns with at least one numeric value."""
 
     return [column for column in frame.columns if pd.api.types.is_numeric_dtype(frame[column]) and frame[column].notna().any()]
+
+
+def ordered_numeric_columns(frame: pd.DataFrame) -> list[str]:
+    """Return numeric columns with known Wind SWE fields first, then the rest alphabetically."""
+
+    available = numeric_columns(frame)
+    preferred = [column for column in WIND_SWE_FIELDS if column in available]
+    remaining = sorted(column for column in available if column not in preferred)
+    return preferred + remaining
+
+
+def default_feature_columns(frame: pd.DataFrame, target_column: str) -> list[str]:
+    """Choose default model inputs from detected CDAWeb columns."""
+
+    available = [column for column in ordered_numeric_columns(frame) if column != target_column]
+    preferred = [column for column in WIND_SWE_FIELDS if column in available]
+    return preferred or available[: min(12, len(available))]
 
 
 def default_target_column(frame: pd.DataFrame) -> str:

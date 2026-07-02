@@ -1,6 +1,12 @@
 import pandas as pd
 
-from solarshield_ai.data import combine_frames, default_target_column, generate_sample_space_weather_data
+from solarshield_ai.data import (
+    combine_frames,
+    default_feature_columns,
+    default_target_column,
+    generate_sample_space_weather_data,
+    ordered_numeric_columns,
+)
 from solarshield_ai.modeling import train_forecast_models
 from solarshield_ai.preprocessing import HORIZON_STEPS, build_features, clean_space_weather_data
 
@@ -46,6 +52,8 @@ def test_wind_swe_style_fields_can_drive_forecast_target_selection():
     results = train_forecast_models(features, target_column="N_elec")
 
     assert default_target_column(raw) == "N_elec"
+    assert ordered_numeric_columns(raw)[:5] == ["N_elec", "U_eGSE_0", "U_eGSE_1", "U_eGSE_2", "T_elec"]
+    assert default_feature_columns(raw, "N_elec") == ["U_eGSE_0", "U_eGSE_1", "U_eGSE_2", "T_elec"]
     assert "wind_speed_magnitude" in features.columns
     assert [result.horizon for result in results] == list(HORIZON_STEPS)
 
