@@ -58,14 +58,26 @@ def build_features(frame: pd.DataFrame, target_column: str = "electron_flux") ->
         featured["solar_wind_coupling"] = featured["southward_imf"] * featured["solar_wind_speed"]
     if {"proton_density", "solar_wind_speed"}.issubset(featured.columns):
         featured["density_pressure_proxy"] = featured["proton_density"] * featured["solar_wind_speed"] ** 2
-    if {"U_eGSE_0", "U_eGSE_1", "U_eGSE_2"}.issubset(featured.columns):
-        featured["wind_speed_magnitude"] = (
-            featured["U_eGSE_0"] ** 2 + featured["U_eGSE_1"] ** 2 + featured["U_eGSE_2"] ** 2
-        ) ** 0.5
-    if {"P_eGSE_0", "P_eGSE_1", "P_eGSE_2"}.issubset(featured.columns):
-        featured["pressure_vector_magnitude"] = (
-            featured["P_eGSE_0"] ** 2 + featured["P_eGSE_1"] ** 2 + featured["P_eGSE_2"] ** 2
-        ) ** 0.5
+    _add_vector_magnitude(
+        featured,
+        ["U_eGSE_0", "U_eGSE_1", "U_eGSE_2"],
+        "wind_speed_magnitude",
+    )
+    _add_vector_magnitude(
+        featured,
+        ["electron_velocity_gse_x", "electron_velocity_gse_y", "electron_velocity_gse_z"],
+        "wind_speed_magnitude",
+    )
+    _add_vector_magnitude(
+        featured,
+        ["P_eGSE_0", "P_eGSE_1", "P_eGSE_2"],
+        "pressure_vector_magnitude",
+    )
+    _add_vector_magnitude(
+        featured,
+        ["electron_pressure_gse_x", "electron_pressure_gse_y", "electron_pressure_gse_z"],
+        "pressure_vector_magnitude",
+    )
 
     return featured.dropna()
 
@@ -83,3 +95,8 @@ def build_supervised_dataset(featured: pd.DataFrame, horizon_steps: int, target_
     x = dataset.drop(columns=["forecast_target"])
     y = dataset["forecast_target"]
     return x, y
+
+
+def _add_vector_magnitude(frame: pd.DataFrame, components: list[str], output_column: str) -> None:
+    if set(components).issubset(frame.columns) and output_column not in frame.columns:
+        frame[output_column] = sum(frame[component] ** 2 for component in components) ** 0.5

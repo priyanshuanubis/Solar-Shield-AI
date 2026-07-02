@@ -32,7 +32,7 @@ PYTHONPATH=src streamlit run app.py
 4. Choose the forecast target, such as `N_elec` for Wind SWE electron density or any other numeric CDAWeb variable exposed by the files.
 5. Choose the input fields to use as model features and run the dashboard.
 
-The app concatenates all `.cdf` files in the folder, sorts by `Epoch`, averages duplicate timestamps, replaces common CDF fill values with missing values, and resamples the data before feature engineering.
+The app follows this CDF pipeline: read CDF files, extract variables, rename variables to model-facing names, merge datasets, then call `clean_space_weather_data()`. It concatenates all `.cdf` files in the folder, sorts by `Epoch`, averages duplicate timestamps, replaces common CDF fill values with missing values, and resamples the data before feature engineering.
 
 ## CSV input schema
 

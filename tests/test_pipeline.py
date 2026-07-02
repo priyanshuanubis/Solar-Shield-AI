@@ -8,6 +8,7 @@ from solarshield_ai.data import (
     ordered_numeric_columns,
 )
 from solarshield_ai.modeling import train_forecast_models
+from solarshield_ai.pipeline import extract_variables, merge_datasets, rename_variables
 from solarshield_ai.preprocessing import HORIZON_STEPS, build_features, clean_space_weather_data
 
 
@@ -67,3 +68,28 @@ def test_combine_frames_collapses_duplicate_timestamps():
 
     assert len(combined) == 2
     assert combined.loc[index[0], "N_elec"] == 2.0
+
+
+def test_requested_pipeline_extracts_renames_and_merges_cdf_variables():
+    index = pd.date_range("2025-02-27", periods=2, freq="5min", name="timestamp")
+    raw = pd.DataFrame(
+        {
+            "N_elec": [1.0, 2.0],
+            "U_eGSE_0": [3.0, 4.0],
+            "U_eGSE_1": [5.0, 6.0],
+            "U_eGSE_2": [7.0, 8.0],
+            "label_U_eGSE": [9.0, 10.0],
+        },
+        index=index,
+    )
+
+    extracted = extract_variables(raw, ["N_elec", "U_eGSE_0", "U_eGSE_1", "U_eGSE_2"])
+    renamed = rename_variables(extracted)
+    merged = merge_datasets([renamed])
+
+    assert list(merged.columns) == [
+        "electron_density",
+        "electron_velocity_gse_x",
+        "electron_velocity_gse_y",
+        "electron_velocity_gse_z",
+    ]

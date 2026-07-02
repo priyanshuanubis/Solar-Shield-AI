@@ -46,6 +46,31 @@ WIND_SWE_FIELDS = [
     "Te_ani",
     "TecAni",
     "Gyrtrp",
+    "electron_density",
+    "electron_velocity_gse_x",
+    "electron_velocity_gse_y",
+    "electron_velocity_gse_z",
+    "core_electron_velocity_gse_x",
+    "core_electron_velocity_gse_y",
+    "core_electron_velocity_gse_z",
+    "electron_pressure_gse_x",
+    "electron_pressure_gse_y",
+    "electron_pressure_gse_z",
+    "electron_temperature",
+    "core_electron_temperature",
+    "electron_heat_flux_x",
+    "electron_heat_flux_y",
+    "electron_heat_flux_z",
+    "core_electron_heat_flux_x",
+    "core_electron_heat_flux_y",
+    "core_electron_heat_flux_z",
+    "electron_parallel_temperature",
+    "electron_perpendicular_temperature",
+    "core_electron_parallel_temperature",
+    "core_electron_perpendicular_temperature",
+    "electron_temperature_anisotropy",
+    "core_electron_temperature_anisotropy",
+    "electron_gyrotropy",
 ]
 
 
@@ -182,7 +207,7 @@ def default_feature_columns(frame: pd.DataFrame, target_column: str) -> list[str
 def default_target_column(frame: pd.DataFrame) -> str:
     """Choose a sensible default target from CDAWeb or sample-data columns."""
 
-    preferred = ["electron_flux", "N_elec", "T_elec", "Te_pal", "Te_per"]
+    preferred = ["electron_flux", "electron_density", "N_elec", "electron_temperature", "T_elec", "Te_pal", "Te_per"]
     available = numeric_columns(frame)
     for column in preferred:
         if column in available:

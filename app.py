@@ -12,14 +12,13 @@ from solarshield_ai.data import (
     combine_frames,
     default_target_column,
     generate_sample_space_weather_data,
-    load_cdf,
-    load_cdf_folder,
     load_csv,
     default_feature_columns,
     ordered_numeric_columns,
     summarize_source,
 )
 from solarshield_ai.modeling import train_forecast_models
+from solarshield_ai.pipeline import process_cdf_file, process_cdf_folder
 from solarshield_ai.preprocessing import build_features, clean_space_weather_data
 from solarshield_ai.visualization import prediction_comparison_chart, target_history_chart
 
@@ -44,12 +43,12 @@ def load_uploaded_file(name: str, suffix: str, content: bytes) -> pd.DataFrame:
         temp_path = Path(handle.name)
     if suffix.lower() == ".csv":
         return load_csv(temp_path)
-    return load_cdf(temp_path)
+    return process_cdf_file(temp_path)
 
 
 @st.cache_data(show_spinner=False)
 def load_combined_folder(folder: str) -> pd.DataFrame:
-    return load_cdf_folder(folder)
+    return process_cdf_folder(folder)
 
 
 def load_dashboard_data() -> tuple[pd.DataFrame, str]:
