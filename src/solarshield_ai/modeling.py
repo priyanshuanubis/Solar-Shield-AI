@@ -30,12 +30,16 @@ class ForecastResult:
     predicted: pd.Series
 
 
-def train_forecast_models(featured: pd.DataFrame, model_name: str = "Gradient Boosting") -> list[ForecastResult]:
+def train_forecast_models(
+    featured: pd.DataFrame,
+    model_name: str = "Gradient Boosting",
+    target_column: str = "electron_flux",
+) -> list[ForecastResult]:
     """Train one model for each configured forecast horizon."""
 
     results: list[ForecastResult] = []
     for horizon, steps in HORIZON_STEPS.items():
-        x, y = build_supervised_dataset(featured, steps)
+        x, y = build_supervised_dataset(featured, steps, target_column=target_column)
         split_index = max(int(len(x) * 0.8), 1)
         if split_index >= len(x):
             raise ValueError(f"Not enough rows to train and validate the {horizon} model.")
@@ -54,7 +58,7 @@ def train_forecast_models(featured: pd.DataFrame, model_name: str = "Gradient Bo
                 mae=float(mean_absolute_error(y_test, predictions)),
                 rmse=float(np.sqrt(mean_squared_error(y_test, predictions))),
                 r2=float(r2_score(y_test, predictions)),
-                actual=y_test.rename("actual_flux"),
+                actual=y_test.rename(f"actual_{target_column}"),
                 predicted=predictions,
             )
         )

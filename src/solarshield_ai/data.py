@@ -5,12 +5,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from importlib.util import find_spec
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import numpy as np
 import pandas as pd
 
-REQUIRED_COLUMNS = ["electron_flux", "solar_wind_speed", "proton_density", "imf_bz"]
+DEFAULT_TARGET_COLUMN = "electron_flux"
+SAMPLE_FEATURE_COLUMNS = ["solar_wind_speed", "proton_density", "imf_bz"]
+SAMPLE_REQUIRED_COLUMNS = [DEFAULT_TARGET_COLUMN, *SAMPLE_FEATURE_COLUMNS]
+CDF_TIME_CANDIDATES = ["Epoch", "epoch", "Time", "time", "Timestamp", "timestamp"]
+CDF_FILL_SENTINELS = (-1.0e31, -1.0e30, 1.0e30, 1.0e31)
 
 
 @dataclass(frozen=True)
@@ -62,36 +66,81 @@ def load_csv(path: str | Path) -> pd.DataFrame:
     frame[timestamp_column] = pd.to_datetime(frame[timestamp_column], utc=False)
     frame = frame.set_index(timestamp_column).sort_index()
     frame.index.name = "timestamp"
-    return _coerce_numeric_frame(frame)
+    return _clean_numeric_frame(frame)
 
 
 def load_cdf(path: str | Path, variables: Iterable[str] | None = None) -> pd.DataFrame:
-    """Load selected variables from a CDF file into a timestamp-indexed dataframe."""
+    """Load CDAWeb CDF variables into a timestamp-indexed dataframe.
 
-    if find_spec("cdflib") is None:
-        raise ImportError("cdflib is required to read CDF files. Install dependencies from requirements.txt.")
+    One-dimensional variables become one dataframe column. Multi-dimensional variables,
+    such as Wind SWE vector fields (`U_eGSE`, `P_eGSE`, etc.), are flattened into
+    component columns like `U_eGSE_0`, `U_eGSE_1`, and `U_eGSE_2`.
+    """
 
-    import cdflib
-
+    cdflib = _require_cdflib()
     cdf = cdflib.CDF(str(path))
     cdf_info = cdf.cdf_info()
-    variable_names = list(variables) if variables else list(cdf_info.zVariables + cdf_info.rVariables)
-    time_variable = _first_present(variable_names, ["Epoch", "epoch", "Time", "time", "timestamp"])
+    all_variables = list(getattr(cdf_info, "zVariables", [])) + list(getattr(cdf_info, "rVariables", []))
+    variable_names = list(variables) if variables else all_variables
+    time_variable = _first_present(variable_names, CDF_TIME_CANDIDATES) or _first_present(all_variables, CDF_TIME_CANDIDATES)
     if time_variable is None:
-        raise ValueError("CDF file must contain an Epoch, Time, or timestamp variable.")
+        raise ValueError(f"{path} must contain one of these time variables: {', '.join(CDF_TIME_CANDIDATES)}")
 
-    epoch_values = cdf.varget(time_variable)
-    timestamps = pd.to_datetime(cdflib.cdfepoch.to_datetime(epoch_values))
+    timestamps = _cdf_epoch_to_datetime(cdflib, cdf.varget(time_variable))
     data: dict[str, np.ndarray] = {}
     for variable_name in variable_names:
-        if variable_name == time_variable:
+        if variable_name == time_variable or variable_name not in all_variables:
             continue
         values = np.asarray(cdf.varget(variable_name))
-        if values.ndim == 1 and len(values) == len(timestamps):
-            data[variable_name] = values
+        data.update(_flatten_cdf_variable(variable_name, values, len(timestamps)))
 
     frame = pd.DataFrame(data, index=pd.DatetimeIndex(timestamps, name="timestamp")).sort_index()
-    return _coerce_numeric_frame(frame)
+    return _clean_numeric_frame(frame)
+
+
+def load_cdf_folder(folder: str | Path, pattern: str = "*.cdf") -> pd.DataFrame:
+    """Load and concatenate every CDAWeb CDF file in a folder.
+
+    This is intended for local `combined/` folders containing many daily CDAWeb
+    downloads such as `wi_h5_swe_YYYYMMDD_v01.cdf`.
+    """
+
+    folder_path = Path(folder).expanduser().resolve()
+    files = sorted(folder_path.glob(pattern))
+    if not files:
+        raise FileNotFoundError(f"No CDF files matching {pattern!r} were found in {folder_path}.")
+    return combine_frames([load_cdf(file_path) for file_path in files])
+
+
+def combine_frames(frames: Sequence[pd.DataFrame]) -> pd.DataFrame:
+    """Concatenate timestamp-indexed frames and collapse duplicate timestamps."""
+
+    usable_frames = [frame for frame in frames if not frame.empty]
+    if not usable_frames:
+        raise ValueError("No usable data frames were loaded.")
+    combined = pd.concat(usable_frames, axis=0, sort=True).sort_index()
+    combined = combined.groupby(level=0).mean(numeric_only=True)
+    combined.index.name = "timestamp"
+    return _clean_numeric_frame(combined)
+
+
+def numeric_columns(frame: pd.DataFrame) -> list[str]:
+    """Return dataframe columns with at least one numeric value."""
+
+    return [column for column in frame.columns if pd.api.types.is_numeric_dtype(frame[column]) and frame[column].notna().any()]
+
+
+def default_target_column(frame: pd.DataFrame) -> str:
+    """Choose a sensible default target from CDAWeb or sample-data columns."""
+
+    preferred = ["electron_flux", "N_elec", "T_elec", "Te_pal", "Te_per"]
+    available = numeric_columns(frame)
+    for column in preferred:
+        if column in available:
+            return column
+    if not available:
+        raise ValueError("No numeric columns are available for forecasting.")
+    return available[0]
 
 
 def summarize_source(frame: pd.DataFrame, source_name: str) -> DataSourceSummary:
@@ -102,8 +151,35 @@ def summarize_source(frame: pd.DataFrame, source_name: str) -> DataSourceSummary
     return DataSourceSummary(source_name, len(frame), frame.index.min(), frame.index.max())
 
 
-def _coerce_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
-    return frame.apply(pd.to_numeric, errors="coerce")
+def _require_cdflib():
+    if find_spec("cdflib") is None:
+        raise ImportError("cdflib is required to read CDF files. Install dependencies from requirements.txt.")
+    import cdflib
+
+    return cdflib
+
+
+def _cdf_epoch_to_datetime(cdflib, epoch_values: np.ndarray) -> pd.DatetimeIndex:
+    converted = cdflib.cdfepoch.to_datetime(epoch_values)
+    return pd.DatetimeIndex(pd.to_datetime(converted))
+
+
+def _flatten_cdf_variable(variable_name: str, values: np.ndarray, expected_rows: int) -> dict[str, np.ndarray]:
+    if values.ndim == 1 and len(values) == expected_rows:
+        return {variable_name: values}
+    if values.ndim == 2 and values.shape[0] == expected_rows:
+        return {f"{variable_name}_{component}": values[:, component] for component in range(values.shape[1])}
+    if values.ndim > 2 and values.shape[0] == expected_rows:
+        flattened = values.reshape(expected_rows, -1)
+        return {f"{variable_name}_{component}": flattened[:, component] for component in range(flattened.shape[1])}
+    return {}
+
+
+def _clean_numeric_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    cleaned = frame.apply(pd.to_numeric, errors="coerce")
+    for sentinel in CDF_FILL_SENTINELS:
+        cleaned = cleaned.mask(np.isclose(cleaned, sentinel, rtol=0, atol=abs(sentinel) * 1e-6))
+    return cleaned.replace([np.inf, -np.inf], np.nan)
 
 
 def _first_present(values: Iterable[str], candidates: Iterable[str]) -> str | None:

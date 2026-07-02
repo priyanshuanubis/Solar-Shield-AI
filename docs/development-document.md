@@ -47,3 +47,9 @@ CDF Files -> Reader -> Cleaning -> Feature Engineering -> Dataset Builder -> LST
 - Interactive dashboard
 - Documentation
 - Presentation and demo
+
+## CDAWeb CDF Input Compatibility
+
+The application supports CDAWeb CDF downloads stored in a local `combined/` folder. All `.cdf` files in that folder are loaded, concatenated by `Epoch`, sorted, deduplicated by timestamp, and exposed in the dashboard as selectable numeric fields.
+
+Wind SWE vector variables such as `U_eGSE`, `UceGSE`, and `P_eGSE` are flattened into component columns such as `U_eGSE_0`, `U_eGSE_1`, and `U_eGSE_2` so they can be used directly as model inputs. Scalar fields such as `N_elec`, `T_elec`, `TcElec`, `Te_pal`, `Te_per`, `Te_ani`, `TecAni`, and `Gyrtrp` remain selectable by their CDAWeb variable names.
